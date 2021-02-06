@@ -1,0 +1,5 @@
+cfg
+cocoimages
+*.py
+*.png
+*.weights
