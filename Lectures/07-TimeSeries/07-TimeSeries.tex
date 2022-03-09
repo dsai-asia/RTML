@@ -1,0 +1,1200 @@
+\documentclass{beamer}
+
+\mode<presentation>
+{
+  \setbeamertemplate{background canvas}[square]
+  \pgfdeclareimage[width=6em,interpolate=true]{dsailogo}{../dsai-logo}
+  \pgfdeclareimage[width=6em,interpolate=true]{erasmuslogo}{../erasmus-logo}
+  \titlegraphic{\pgfuseimage{dsailogo} \hspace{0.2in} \pgfuseimage{erasmuslogo}}
+  %\usetheme{default}
+  \usetheme{Madrid}
+  \usecolortheme{rose}
+  \usefonttheme[onlysmall]{structurebold}
+}
+
+\usepackage{pgf,pgfarrows,pgfnodes,pgfautomata,pgfheaps,pgfshade}
+\usepackage{amsmath,amssymb}
+\usepackage{graphics}
+\usepackage{ragged2e}
+\usepackage[latin1]{inputenc}
+\usepackage{colortbl}
+\usepackage[absolute,overlay]{textpos}
+\setlength{\TPHorizModule}{30mm}
+\setlength{\TPVertModule}{\TPHorizModule}
+\textblockorigin{10mm}{10mm}
+\usepackage[english]{babel}
+\usepackage{listings}
+\setbeamercovered{dynamic}
+
+\AtBeginSection[]{
+  \begin{frame}<beamer>
+  \frametitle{Outline}
+  \tableofcontents[currentsection]
+  \end{frame}
+}
+
+\title[RTML]{Recent Trends in Machine Learning\\Time Series}
+\author{dsai.asia}
+\institute[]{Asian Data Science and Artificial Intelligence Master's Program}
+\date{}
+
+% My math definitions
+
+\renewcommand{\vec}[1]{\boldsymbol{#1}}
+\newcommand{\mat}[1]{\mathtt{#1}}
+\newcommand{\ten}[1]{\mathcal{#1}}
+\newcommand{\crossmat}[1]{\begin{bmatrix} #1 \end{bmatrix}_{\times}}
+\renewcommand{\null}[1]{{\cal N}(#1)}
+\newcommand{\class}[1]{{\cal C}_{#1}}
+\def\Rset{\mathbb{R}}
+\def\E{\mathbb{E}}
+\def\Pset{\mathbb{P}}
+\DeclareMathOperator*{\argmax}{argmax}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator*{\sign}{sign}
+\DeclareMathOperator*{\diag}{diag}
+\def\norm{\mbox{$\cal{N}$}}
+\newcommand{\T}[0]{\top}
+
+\newcommand{\stereotype}[1]{\guillemotleft{{#1}}\guillemotright}
+
+\newcommand{\myfig}[3]{\centerline{\includegraphics[width={#1}]{{#2}}}
+    \centerline{\scriptsize #3}}
+
+\begin{document}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%             CONTENTS START HERE
+
+%\setbeamertemplate{navigation symbols}{}
+
+\frame{\titlepage}
+
+%--------------------------------------------------------------------
+%\part<presentation>{Part name}
+%
+%\frame{\partpage}
+
+\begin{frame}
+\frametitle{Readings}
+
+Readings for these lecture notes:
+\begin{itemize}
+\item[-] Goodfellow, I., Bengio, Y., and Courville, A. (2016),
+  Deep Learning. MIT Press.
+\end{itemize}
+
+These notes contain material $\copyright$ Goodfellow et al.\ (2016).
+
+\end{frame}
+
+%--------------------------------------------------------------------
+\section{Introduction}
+%--------------------------------------------------------------------
+
+\begin{frame}{Introduction}
+
+  In this series, we discuss time series modeling.
+
+  \medskip
+
+  We are face with a sequence of values $\vec{x}^{(1)}, \vec{x}^{(2)},
+  \ldots, \vec{x}^{(\tau)}$.
+
+  \medskip
+
+  If we use a fixed-size input, we can only consider a \alert{sliding
+    window} over time. We could use a 1D CNN for this.
+
+  \medskip
+  
+  A \alert{recurrent neural network} is a network specialized for
+  processing sequential data that can (usually) handle
+  arbitrary-length sequences.
+
+  \medskip
+
+  Like CNNs, RNNs use the principle of \alert{parameter sharing}
+  to allow flexible processing of information that could appear anywhere
+  in the sequence.
+
+\end{frame}
+
+
+\begin{frame}{Introduction}
+
+  Goodfellow's example:
+
+  \medskip
+  
+  \textit{I went to Nepal in 2009.}
+
+  \textit{In 2009, I went to Nepal.}
+
+  \medskip
+
+  Both sentences contain similar information at different
+  positions.
+
+  \medskip
+
+  Parameter sharing will help us form a compact model that applies the
+  same rules or similar rules at different positions in the input.
+  
+\end{frame}
+
+%--------------------------------------------------------------------
+\section{Unfolding cyclic computations}
+%--------------------------------------------------------------------
+
+\begin{frame}{Unfolding cyclic computations}
+
+  A \alert{dynamical system} has the form
+  
+  \[ \vec{s}^{(t)} = f(\vec{s}^{(t-1)};\vec{\theta}), \] 
+
+  where $\vec{s}^{(t)}$ is the \alert{state} of the system at time $t$.
+
+  \medskip
+  
+  Considering the state after a particular number of steps $\tau$,
+  we observe
+  \begin{eqnarray}
+    \vec{s}^{(3)} & = & f(\vec{s}^{(2)};\vec{\theta}) \nonumber \\
+    & = & f(f(\vec{s}^{(1)};\vec{\theta});\vec{\theta}) \nonumber
+  \end{eqnarray}
+
+  This removal of recurrence is called \alert{unfolding} the computation.
+  The unfolded computatational graph looks like this:
+
+  \medskip
+  
+  \myfig{3in}{goodfellow-fig10-01}{Goodfellow, Bengio, and Courville (2016), Fig.\ 10.1}
+  
+\end{frame}
+
+
+\begin{frame}{Unfolding cyclic computations}
+
+  Now consider a dynamical system driven by an input $\vec{x}^{(t)}$:
+
+  \[ \vec{s}^{(t)} = f(\vec{s}^{(t-1)},\vec{x}^{(t)};\vec{\theta}), \] 
+
+  In the neural network community, we would use $\vec{h}$ rather than
+  $\vec{x}$ as a hint that the state of the system is \alert{hidden}
+  and represented by hidden units in the model:
+  
+  \[ \vec{h}^{(t)} = f(\vec{h}^{(t-1)},\vec{x}^{(t)};\vec{\theta}), \] 
+
+  The recurrent \alert{circuit} (with black square indicating a
+  \alert{time delay}) on the left can be \alert{unfolded} into the
+  \alert{acyclic computational graph} on the right:
+
+  \medskip
+  
+  \myfig{3in}{goodfellow-fig10-02}{Goodfellow, Bengio, and Courville
+    (2016), Fig.\ 10.2}
+  
+\end{frame}
+
+
+\begin{frame}{Unfolding cyclic computations}
+
+  One of the most common tasks of a RNN is to \alert{predict the future
+    from the past}.
+
+  \medskip
+
+  A model trained to do this will use $\vec{h}^{(t)}$ to form a
+  \alert{lossy summary} of the inputs $\vec{x}^{(1)}, \ldots, \vec{x}^{(t)}$
+  up to time $t$.
+
+  \medskip
+
+  Unfolding a circuit can be modeled mathematically by replacing the
+  recurrent function $f(\cdot,\cdot;\cdot)$ with its unfolded version
+  $g(\ldots)$:
+  \begin{eqnarray}
+    \vec{h}^{(t)} & = & g^{(t)}(\vec{x}^{(t)},\vec{x}^{(t-1)},\ldots,\vec{x}^{(1)}) \nonumber \\
+    & = & f(\vec{h}^{(t-1)},\vec{x}^{(t)};\vec{\theta}) \nonumber
+  \end{eqnarray}
+
+  \medskip
+
+  Our goal, then, is to learn parameters $\vec{\theta}$ of the
+  \alert{single model} $f(\cdot,\cdot;\vec{\theta})$ using the
+  unfolded computation $g^{(t)}(\ldots)$.
+  
+\end{frame}
+
+%--------------------------------------------------------------------
+\section{Recurrent neural networks}
+%--------------------------------------------------------------------
+
+\begin{frame}{Recurrent neural networks}{RNN types}
+
+  Now we can consider different types of RNNs.
+
+  \medskip
+
+  This ``Elman'' network produces an output at each time $t$ and has
+  recurrent connections \alert{between its hidden units}:
+
+  \medskip
+
+  \myfig{2.2in}{goodfellow-fig10-03}{Goodfellow, Bengio, and Courville
+    (2016), Fig.\ 10.3}
+
+  \medskip
+
+  $\vec{L}$ is a loss function that can be factored into individual
+  comparisons $L^{(t)}(\vec{o}^{(t)},\vec{y}^{(t)})$ of the actual output
+  $\vec{o}^{(t)}$ with the desired output $\vec{y}^{(t)}$.
+
+\end{frame}
+
+
+\begin{frame}{Recurrent neural networks}{RNN types}
+
+  This ``Jordan'' network produces an output at each time $t$ and has
+  recurrent connections \alert{from the output at one time step to the
+    hidden units at the next step}:
+
+  \medskip
+  
+  \myfig{3in}{goodfellow-fig10-04}{Goodfellow, Bengio, and Courville
+    (2016), Fig.\ 10.4}
+  
+\end{frame}
+
+
+\begin{frame}{Recurrent neural networks}{RNN types}
+
+  This network is similar to the Elman network but \alert{reads an
+    entire sequence} before producing an output.
+
+  \medskip
+  
+  \myfig{2.5in}{goodfellow-fig10-05}{Goodfellow, Bengio, and Courville
+    (2016), Fig.\ 10.5}
+  
+\end{frame}
+
+
+\begin{frame}{Recurrent neural networks}{Assumptions}
+
+  The Elman network (the first of the three types, Figure 10.3 in
+  Goodfellow et al.) is typical and is Turing complete.
+
+  \medskip
+
+  Let's make some assumptions:
+  \begin{itemize}
+  \item The hidden units use $\tanh$ activation functions
+  \item The output $\vec{o}^{(t)}$ is a vector of unnormalized log
+    probabilities for a discrete multinomial ouptut
+  \item The output vector is softmaxed to obtain $\hat{\vec{y}}^{(t)}$.
+  \item The loss function is negative log likelihood for the discrete
+    multinomial output
+  \end{itemize}
+
+  Based on these assumptions, we can apply backpropagation to the unfolded
+  model. This is called \alert{backpropagation through time}.
+
+\end{frame}
+
+
+\begin{frame}{Recurrent neural networks}{BPTT}
+
+  For the \alert{output at time $t$}:\footnote{$\delta_{i,j}$ is the
+    Kronecker delta (1 if $i=j$, 0 otherwise).}
+  \[ (\nabla_{\vec{o}^{(t)}}L)_i = \hat{y}_i^{(t)}-\delta_{i,y^{(t)}} \]
+
+  This is true for any $t$, because we assume the loss is applied
+  independently for each element in the sequence.
+  
+  \medskip
+
+  For the hidden layer, \alert{at the last $t=\tau$}, if the
+  hidden-to-output weights are $\mat{V}$, we have
+  \[ \nabla_{\vec{h}^{(\tau)}}L = \mat{V}^\T \nabla_{\vec{o}^{(\tau)}}L \]
+
+\end{frame}
+
+
+\begin{frame}{Recurrent neural networks}{BPTT}
+
+  For other times $t<\tau$, we apply the chain rule, considering the
+  effect of $\vec{h}^{(t)}$ on both $\vec{o}^{(t)}$ and
+  $\vec{h}^{(t+1)}$:\footnote{Recall that $\tanh(z) =
+    (e^{z}-e^{-z})/(e^{z}+e^{-z})$ and $\tanh'(z) = (1 -
+    \tanh^2(z))dz$.}
+  \begin{eqnarray}
+    \nabla_{\vec{h}^{(t)}}L & = &
+      \frac{\partial \vec{h}^{(t+1)}}{\partial \vec{h}^{(t)}}
+      (\nabla_{\vec{h}^{(t+1)}}L) +
+      \frac{\partial \vec{o}^{(t)}}{\partial \vec{h}^{(t)}}
+      (\nabla_{\vec{o}^{(t)}}L) \nonumber \\
+      & = &
+      \mat{W}^\T \diag\left( 1 - \left( \vec{h}^{(t+1)} \right)^2 \right)
+      (\nabla_{\vec{h}^{(t+1)}}L) +
+      \mat{V}^\T (\nabla_{\vec{o}^{(t)}}L) \nonumber
+  \end{eqnarray}
+
+  Once these gradients are computed, we can compute the responsibility of
+  each weight for the total loss.
+
+\end{frame}
+
+
+\begin{frame}{Recurrent neural networks}{BPTT}
+
+  We introduce \alert{dummy variables} $\mat{W}^{(t)}$ to indicate the
+  value of the weights at time $t$, i.e., $w_{ij}^{(t)}$ connects
+  $h_j^{(t-1)}$ to $h_i^{(t)}$.
+
+  \medskip
+
+  Actually, during one iteration, the weights do not change
+  ($\mat{W}^{(t)} = \mat{W}^{(t')}$).
+
+  \medskip
+  
+  However, the dummy variables will let us calculate the contribution
+  of each weight to the loss $\nabla_{\mat{W}^{(t)}}L$ at each
+  timestep separately.
+
+  \medskip
+
+  For a particular weight $w^{(t)}_{ij}$ at time $t$ and the hidden
+  unit $h^{(t)}_i$ it's connected to, we have
+  \[ \frac{\partial L}{\partial w^{(t)}_{ij}} = \frac{\partial L}{\partial h^{(t)}_i} \frac{\partial h^{(t)}_i}{\partial w^{(t)}_{ij}} .\]
+
+\end{frame}
+
+
+\begin{frame}{Recurrent neural networks}{BPTT}
+
+  Summing over time, we obtain
+  \[ \nabla_{\mat{W}}L = \sum_t \diag\left( 1-\left(\vec{h}^{(t)}\right)^2\right)
+                       (\nabla_{\vec{h}^{(t)}}L)\vec{h}^{(t-1)\T}. \]
+
+  For $\mat{U}$ connecting $\vec{x}^{(t)}$ to $\vec{h}^{(t)}$, we obtain
+  the similar
+  \[ \nabla_{\mat{U}}L = \sum_t \diag\left( 1-\left(\vec{h}^{(t)}\right)^2\right)
+  (\nabla_{\vec{h}^{(t)}}L)\vec{x}^{(t)\T}. \]
+
+  For the hidden unit biases $\vec{b}$, we obtain
+  \[ \nabla_{\vec{b}}L = \sum_t \diag\left( 1-\left(\vec{h}^{(t)}\right)^2\right)
+  \nabla_{\vec{h}^{(t)}}L. \]
+ 
+\end{frame}
+
+
+\begin{frame}{Recurrent neural networks}{BPTT}
+
+  For $\mat{V}$ connecting $\vec{h}^{(t)}$ to $\vec{o}^{(t)}$, we
+  obtain the simpler
+  \[ \nabla_{\mat{U}}L = \sum_t (\nabla_{\vec{o}^{(t)}}L)\vec{h}^{(t)\T}, \]
+
+  and for the output biases $\vec{c}$ it is easy to derive
+  \[ \nabla_{\vec{c}}L = \sum_t \nabla_{\vec{o}^{(t)}}L. \]
+  
+\end{frame}
+
+% Leaving out teacher forcing:
+% \myfig{2in}{goodfellow-fig10-06}
+% {Goodfellow, Bengio, and Courville (2016), Fig.\ 10.6}
+
+%--------------------------------------------------------------------
+\section{RNNs as directed graphical models}
+%--------------------------------------------------------------------
+
+\begin{frame}{RNNs as directed graphical models}{Modeling a joint distribution}
+
+  Thus far, our RNNs have modeled
+  \[ p(\vec{y}^{(t)} \mid \vec{x}^{(1)}, \ldots, \vec{x}^{(t)}) \]
+  or
+  \[ p(\vec{y}^{(t)} \mid \vec{x}^{(1)}, \ldots, \vec{x}^{(t)},
+  \vec{y}^{(1)}, \ldots, \vec{y}^{(t-1)}), \] the difference being
+  whether $\vec{y}^{(t-1)}$ is an input to the model at time $t$ or
+  not.
+
+  \medskip
+
+  To better understand RNNs, we'll see how they can model joint
+  distributions over a scalar sequence $Y^{(1)}=y^{(1)},\ldots,Y^{(\tau)}=y^{(\tau)}$,
+  leaving out any external inputs $x$ for now:
+  \[ P(\mathbb{Y}) = P(Y^{(1)},\ldots,Y^{(\tau)}) \]
+  
+\end{frame}
+
+
+\begin{frame}{RNNs as directed graphical models}{Factoring a joint distribution}
+
+  We know that $P(\mathbb{Y})$ can always be factored as
+  \[ P(\mathbb{Y}) = \prod_{i=1}^\tau P(Y^{(t)} \mid Y^{(t-1)}, \ldots, Y^{(1)}). \]
+  If we wanted to estimate the parameters of $P(\mathbb{Y})$ using maximum
+  likelihood, we would try to minimize
+  \[ L = \sum_t L^{(t)} = -\sum_t \log P(Y^{(t)}=y^{(t)} \mid
+     Y^{(t-1)}=y^{(t-1)},\ldots,
+     Y^{(1)}=y^{(1)}).\]
+\end{frame}
+
+
+\begin{frame}{RNNs as directed graphical models}{Fully connected graphical model}
+
+  This corresponds to the ``fully connected'' graphical model
+
+  \medskip
+  
+  \myfig{3in}{goodfellow-fig10-07}{Goodfellow, Bengio, and Courville (2016), Fig.\ 10.7}
+
+  \medskip
+
+  The estimation procedure gets \alert{more complex} each time we add
+  an element to the sequence. If $Y^{(t)}$ is discrete with $k$ values,
+  the number of parameters is $O(k^\tau)$!
+
+\end{frame}
+
+
+\begin{frame}{RNNs as directed graphical models}{Markov assumption}
+
+  To avoid this increase in complexity in a graphical model, we
+  usually make a \alert{Markov assumption} that the distribution at
+  time $t$ only depends on the last $k$ steps:
+  \begin{eqnarray}
+  P(Y^{(t)}=y^{(t)} \mid Y^{(t-1)}=y^{(t-1)},\ldots,y^{(1)}) = \nonumber \\
+  P(Y^{(t)}=y^{(t)} \mid Y^{(t-1)}=y^{(t-1)},\ldots,y^{(t-k)}). \nonumber
+  \end{eqnarray}
+
+\end{frame}
+
+
+\begin{frame}{RNNs as directed graphical models}{RNNs avoid Markov assumption}
+
+  RNNs capture dependency more flexibly than the Markov
+  assumption.
+
+  \medskip
+
+  The model's state can remember values $y^{(i)}$ for \alert{any}
+  previous step $i$ and capture a dependency of $Y^{(t)}$ on the
+  fact that $Y^{(i)}=y^{(i)}$.
+
+  \medskip
+
+  When we marginalize out the state $\vec{h}^{(t)}$ in a RNN, we get
+  the fully connected model we previously saw (Figure 10.7).
+
+  \medskip
+
+  But when we incorporate the RNN state $\vec{h}^{(t)}$, we \alert{decouple}
+  $Y^{(t)}$ from $Y^{(t-1)},\ldots,Y^{(1)}$, and the number of parameters
+  \alert{no longer depends on $\tau$}:
+
+  \medskip
+  
+  
+  \myfig{3in}{goodfellow-fig10-08}{Goodfellow, Bengio, and Courville (2016), Fig.\ 10.8}
+  
+\end{frame}
+
+
+\begin{frame}{RNNs as directed graphical models}{Sampling}
+
+  If we want to use a RNN as a generative model (sample from it),
+  we just sample from the conditional distribution.
+
+  \medskip
+
+  Determining the number of elements $\tau$ in the sequence is tricky
+  but can be solved by using
+  \begin{itemize}
+  \item A special \alert{stop symbol} or output variable indicating
+    whether to stop.
+  \item Sample from a distribution over $\tau$.
+  \end{itemize}
+
+  \medskip
+
+  With these techniques, our RNN can be used to synthesize sequential
+  data.
+    
+\end{frame}
+
+
+\begin{frame}{RNNs as directed graphical models}{Conditioning on input}
+
+  Now, we would like to add the \alert{input} $\vec{x}^{(t)}$.
+
+  \medskip
+
+  We already have a model capable of representing $P(\vec{y} ;
+  \vec{\theta})$.
+
+  \medskip
+
+  To take $\vec{x}$ into account, we turn the model into a conditional
+  one: $P(\vec{y} \mid \vec{\omega})$ with $\vec{\omega}=\vec{\theta}$
+  (we introduce a random variable $\vec{\omega}$ with value fixed to
+  $\vec{\theta}$.
+
+  \medskip
+
+  Next, we extend the model to $\vec{\omega}$ being a function of an
+  input $\vec{x}$.
+
+  \medskip
+
+  The input $\vec{x}$ could be
+  \begin{itemize}
+  \item An extra input at each time step $t$
+  \item The initial value of the hidden state $\vec{h}$
+  \item Both
+  \end{itemize}
+  
+\end{frame}
+
+
+\begin{frame}{RNNs as directed graphical models}{Conditioning on input}
+
+  A common case is feeding the same fixed-size input $\vec{x}$ to the model
+  at every time:
+
+  \myfig{1.8in}{goodfellow-fig10-09}{Goodfellow, Bengio, and Courville (2016), Fig.\ 10.9}
+
+  \medskip
+
+  An example is \alert{image captioning}, in which the image is static
+  but the output is a sequence of tokens (words).
+  
+\end{frame}
+
+\begin{frame}{RNNs as directed graphical models}{Conditioning on input}
+
+  \begin{columns}
+
+    \column{2.3in}
+
+    Another common scenario: input that varies over time.
+
+    \medskip
+  
+    This model is more powerful than the Elman model of Figure 10.3
+    which assumes \begin{eqnarray}
+    P(\vec{y}^{(1)},\ldots,\vec{y}^{(\tau)} \mid
+    \vec{x}^{(1)},\ldots,\vec{x}^{(\tau)}) = \nonumber \\
+    \prod_t P(\vec{y}^{(t)} \mid
+    \vec{x}^{(1)},\ldots,\vec{x}^{(t)}). \nonumber \end{eqnarray}
+
+    \medskip
+
+    By feeding $\vec{y}^{(t-1)}$ to $\vec{y}^{(t)}$, we can model
+    arbitrary dependencies among the $\vec{y}^{(t)}$.
+      
+    \column{2.1in}
+    
+    \myfig{2.1in}{goodfellow-fig10-10}{Goodfellow, et al.\ (2016),
+      Fig.\ 10.10}
+
+  \end{columns}
+  
+\end{frame}
+
+%--------------------------------------------------------------------
+\section{Specialized RNN structures}
+%--------------------------------------------------------------------
+
+\begin{frame}{Specialized RNN structures}{Bidirectional RNNs}
+
+  \begin{columns}
+
+    \column{2.5in}
+    
+    Thus far, the models we've seen have been \alert{causal}.
+
+    \medskip
+
+    The sequence is processed in one direction only, so future inputs
+    cannot influence decisions we make at time $t$.
+
+    \medskip
+
+    Alternative: \alert{bidirectional RNNs} process in left-to-right
+    and right-to-left concurrently.
+
+    \medskip
+
+    Output $\vec{o}^{(t)}$ is conditional not only on $\vec{h}^{(t)}$ but
+    also $\vec{g}^{(t)}$, which summarizes all ``future'' inputs.
+
+    \medskip
+
+    The approach can be generalized to 2D data (e.g., images)
+    with four directions.
+
+    \column{2in}
+    
+    \myfig{1.5in}{goodfellow-fig10-11}{Goodfellow et al.\ (2016),
+      Fig.\ 10.11}
+
+  \end{columns}
+  
+\end{frame}
+
+
+\begin{frame}{Specialized RNN structures}{Encoder-decoder architectures}
+
+  \begin{columns}
+
+    \column{2.4in}
+    
+    When we are modeling translations between variable-length sequences,
+    a very powerful modern architecture is the \alert{sequence to sequence}
+    or \alert{encoder-decoder} architecture.
+
+    \medskip
+
+    Similar models were introduced in 2014 by Google (seq2seq) and
+    Cho et al.\ (encoder-decoder).
+
+    \medskip
+
+    We explore the ability of this model to translate between languages
+    in lab.
+    
+    \column{2.1in}
+    
+    \myfig{2in}{goodfellow-fig10-12}{Goodfellow et al.\ (2016), Fig.\ 10.12}
+
+  \end{columns}
+  
+\end{frame}
+
+
+\begin{frame}{Specialized RNN structures}{Deep RNNs}
+    
+  Thus far the models we've seen have been relatively \alert{shallow}.
+
+  \medskip
+  
+  We have blocks of parameters for
+  \begin{itemize}
+  \item Input to hidden
+  \item Hidden to output
+  \item Hidden to hidden
+  \end{itemize}
+
+  \medskip
+  
+  RNNs can be made deeper at multiple levels.
+
+  \medskip
+  
+  Empirically, this has been shown to improve performance on large complex
+  problems.
+
+\end{frame}
+
+
+\begin{frame}{Specialized RNN structures}{Deep RNNs}
+    
+  Example: adding additional layers in the hidden-to-hidden transformation.
+
+  \medskip
+  
+  \myfig{2.0in}{goodfellow-fig10-13}{Goodfellow, Bengio, and Courville (2016), Fig.\ 10.13}
+
+  \medskip
+  
+  Models like this are more difficult to optimize, but using skip
+  connections (rightmost architecture) helps.
+  
+\end{frame}
+
+
+\begin{frame}{Specialized RNN structures}{Recursive RNNs}
+
+  \begin{columns}
+
+    \column{2.5in}
+    
+    \alert{Recursive} RNNs use a tree structure to process the input rather
+    than a chain.
+
+    \medskip
+
+    Variable-length input of length $\tau$ can be processed with
+    $\log(\tau)$ parameters.
+
+    \medskip
+    
+    Processing can be parallelized.
+
+    \medskip
+
+    Issues include how to structure the tree or how to learn an
+    appropriate structure of the tree.
+
+    \medskip
+
+    If the model is processing a rich data structure that has a tree
+    structure already, such as a parse tree, the approach is very efficient.
+
+    \medskip
+    
+    There are many variations on the idea.
+    
+    \column{2in}
+    
+    \myfig{1.5in}{goodfellow-fig10-14}{Goodfellow et al.\ (2016), Fig.\ 10.14}
+
+  \end{columns}
+  
+\end{frame}
+
+
+%--------------------------------------------------------------------
+\section{Dealing with long-term dependencies}
+%--------------------------------------------------------------------
+
+
+\begin{frame}{Dealing with long-term dependences}{Vanishing and exploding gradients}
+
+  The big problem with RNNs is \alert{long-term dependencies}.
+
+  \medskip
+
+  Gradients propagated over many stages tend to \alert{vanish} or
+  \alert{explode}.
+
+  \medskip
+
+  Vanishing gradients are most often the problem. We'll do a brief
+  analysis of the problem here.
+
+\end{frame}
+
+
+\begin{frame}{Dealing with long-term dependences}{Nonlinearity}
+
+  Repeated computations over multiple stages introduce nonlinearity
+  that becomes more extreme as the number of stages increases:
+
+  \medskip
+  
+  \myfig{3in}{goodfellow-fig10-15}{Goodfellow, Bengio, and Courville (2016), Fig.\ 10.15}
+
+  (The legend shows the number of steps in the recurrent calculation,
+  the $x$ axis shows an input along a random linear direction in the
+  high dimensional input space, and the $y$ axis shows a projection of
+  the resulting output.)
+  
+\end{frame}
+
+
+\begin{frame}{Dealing with long-term dependences}{Multi-stage calculations}
+
+  Without any nonlinearity in the hidden layer calculation, part of
+  a RNN's computation will be
+  something like
+  \[ \vec{h}^{(t)} = \mat{W}^\T \vec{h}^{(t-1)}. \]
+
+  Unfolding, we obtain
+  \[ \vec{h}^{(t)} = \left( \mat{W}^t \right)^\T \vec{h}^{(0)}. \]
+
+  If $\mat{W}$ is diagonalizable,\footnote{A non-diagonalizable square
+    matrix is called \alert{defective}. A defective matrix is one that
+    has less than $n$ distinct eigenvalues.}  it can be factored using
+  an eigendecomposition
+  \[ \mat{W} = \mat{Q} \mat{\Lambda} \mat{Q}^T \]
+  with $\mat{Q}$ containing (orthogonal) eigenvectors of $\mat{W}$
+  and $\mat{\Lambda}$ a diagonal matrix containing the eigenvectors
+  of $\mat{W}$.
+
+  \medskip
+
+  This means we have
+  \[ \vec{h}^{(t)} = \mat{Q}^\T\mat{\Lambda}^t\mat{Q} \vec{h}^{(0)}. \]
+  
+\end{frame}
+
+
+\begin{frame}{Dealing with long-term dependences}{Nonlinearity}
+
+  Note if $\tau$ is long, any entry in $\mat{\Lambda}$ will explode if
+  it greater than one or vanish if it is less than one.
+
+  \medskip
+
+  Also, any element of $\vec{h}^{(0)}$ not aligned with the largest
+  eigenvector of $\mat{W}$ will eventually be eliminated.
+
+  \medskip
+
+  In feedforward networks, the problem is solved by using
+  different $\mat{W}$ at each step of the feedforward calculation.
+
+  \medskip
+
+  In a recurrent network, however, the gradient of a long-term
+  interaction will necessarily be exponentially smaller than the
+  gradient of a short-term interaction.
+
+  \medskip
+
+  This makes it impractical to learn long-term interactions beyond 10 or
+  20 elements.
+  
+\end{frame}
+
+
+\begin{frame}{Dealing with long-term dependences}{Echo state networks}
+
+  \alert{Echo state networks} and their cousins attempt to use
+  hidden-to-hidden weights that efficiently store the input sequence.
+
+  \medskip
+
+  Then only the hidden-to-output weights (short term interactions)
+  need to be learned.
+
+\end{frame}
+
+
+\begin{frame}{Dealing with long-term dependences}{Multiple time scales}
+
+  A different approach is to have a model that operates at
+  \alert{multiple time scales}.
+
+  \medskip
+
+  Adding a \alert{skip connection}, of length $d$, for example,
+  decreases the length of the path from time $t$ to time $t-d$ from
+  $d$ to 1.
+
+  \medskip
+
+  Hidden units with \alert{linear self connections} can give paths with
+  a product of derivatives close to 1, minimizing the vanishing or
+  exploding of gradients.
+
+  \medskip
+  
+  Units with linear self-connections are called \alert{leaky units}.
+
+  \medskip
+
+  It is also possible to \alert{remove} short-term connections and
+  replace them with long-term ones.
+
+  \medskip
+
+  Dealing with long term dependencies is one of the open areas of
+  research.  The most effective strategy we have up till now is
+  \alert{gating}.
+  
+\end{frame}
+
+%--------------------------------------------------------------------
+\section{Gated RNNs}
+%--------------------------------------------------------------------
+
+\begin{frame}{Gated RNNs}
+
+  The most effective RNNs known today are \alert{gated RNNs}:
+  \begin{itemize}
+  \item Long short-term memory (LSTM)
+  \item Gated recurrent units (GRUs)
+  \end{itemize}
+
+  \medskip
+
+  Basic idea: create a path through time that has derivatives that neither
+  vanish nor explode.
+
+  \medskip
+
+  Gated units use the idea of weights that can \alert{change at each
+    time step} to avoid vanishing/exploding that occurs when repeating
+  the same transformation repeatedly.
+
+  \medskip
+
+  Besides \alert{accumulating} information over time like leaky units,
+  we want to \alert{forget} information that is no longer useful.
+
+  \medskip
+
+  Gated RNNs \alert{learn when to forget} by resetting their hidden
+  state to 0.
+  
+\end{frame}
+
+
+\begin{frame}{Gated RNNs}{LSTMs}
+
+  LSTM was introduced by Hochreiter and Schmidhuber in 1997.
+
+  \medskip
+
+  The model uses the idea of \alert{self loops} to increase the
+  practical length of interactions without vanishing gradients.
+
+  \medskip
+
+  The self-loop is \alert{conditioned on the context} rather than
+  being fixed.
+
+  \medskip
+
+  We can therefore think of the time constants for integration of
+  information over long periods of time as being \alert{determined by
+    the model once it sees the input}.
+  
+\end{frame}
+
+
+\begin{frame}{Gated RNNs}{LSTMs}
+
+  \myfig{2in}{goodfellow-fig10-16}{Goodfellow, Bengio, and Courville
+    (2016), Fig.\ 10.16}
+  
+\end{frame}
+
+
+\begin{frame}{Gated RNNs}{LSTMs}
+
+  The \alert{forget gate} computes forget outputs
+  \[ \vec{f}^{(t)} = \sigma\left( \vec{b}^f + \mat{U}^f\vec{x}^{(t)}
+  + \mat{W}^f\vec{h}^{(t-1)} \right) \]
+  The \alert{external input gate} computes outputs
+  \[ \vec{g}^{(t)} = \sigma\left( \vec{b}^g + \mat{U}^g\vec{x}^{(t)}
+  + \mat{W}^g\vec{h}^{(t-1)} \right) \]
+  then the \alert{state units} compute the state
+  \[ \vec{s}^{(t)} = \vec{f}^{(t)}\odot\vec{s}^{(t-1)} + \vec{g}^{(t)}\odot
+  \sigma\left( \vec{b} + \mat{U}\vec{x}^{(t)} + \mat{W}\vec{h}^{(t-1)}
+  \right) \]
+
+\end{frame}
+
+
+\begin{frame}{Gated RNNs}{LSTMs}
+
+  In the meantime, the \alert{output gate} computes outputs
+  \[ \vec{q}^{(t)} = \sigma\left( \vec{b}^o + \mat{U}^o\vec{x}^{(t)}
+  + \mat{W}^o \vec{h}^{(t-1)} \right), \]
+  then the final \alert{hidden state} output by the LSTM module is
+  \[ \vec{h}^{(t)} = \tanh\left( \vec{s}^{(t)} \right) \odot \vec{q}^{(t)} .\]
+  Sometimes the internal state $\vec{s}^{(t-1)}$ is used as an additional input
+  to the gates at time $t$.
+
+  \medskip
+
+  LSTMs have been shown to learn long term dependencies more easily
+  than the state units in ordinary RNNs.
+
+  \medskip
+  
+  They are the basis of \alert{seq2seq}
+  (Sutskever et al., 2014) and many other successful models.
+  
+\end{frame}
+
+
+\begin{frame}{Gated RNNs}{GRUs}
+
+  LSTM is extremely successful but a little complicated.
+
+  \medskip
+
+  We would like to know what is essential and what is unnecessary in the
+  LSTM architecture.
+
+  \medskip
+
+  The \alert{Gated Recurrent Unit (GRU)} is similar but slightly simpler:
+  \[ \vec{h}^{(t)} = \vec{u}^{(t-1)} \odot \vec{h}^{(t-1)} +
+  (\vec{1}-\vec{u}^{(t-1)}) \sigma\left( \vec{b}
+  + \mat{U}\vec{x}^{(t)} + \mat{W}\left(\vec{r}^{(t-1)}\odot \vec{h}^{(t-1)}\right) \right) \]
+  $\vec{u}$ stands for \alert{update gate}, and
+  $\vec{r}$ stands for \alert{reset gate}:
+  \[ \vec{u}^{(t)} = \sigma\left( \vec{b}^u + \mat{U}^u\vec{x}^{(t)} +
+  \mat{W}^u\vec{h}^{(t)} \right) \]
+  \[ \vec{r}^{(t)} = \sigma\left( \vec{b}^r + \mat{U}^r\vec{x}^{(t)} +
+  \mat{W}^r\vec{h}^{(t)} \right) \]
+  
+\end{frame}
+
+
+\begin{frame}{Gated RNNs}{GRUs}
+
+  The update gate acts as a \alert{leaky integrator} with amount of
+  integration dependent on the input.
+
+  \medskip
+
+  It can ignore the input (copying the old hidden state)
+  or ignore the old hidden state (replacing it with the new target
+  hidden state).
+
+  \medskip
+  
+  The reset and update gates can each selectively ignore parts of the
+  state vector.
+
+  \medskip
+
+  There have been many studies of variations. The upshot:
+  \begin{itemize}
+    \item The \alert{forget gates are critical} (for LSTM and GRU).
+    \item A \alert{bias of 1 for the LSTM forget gate} is very useful.
+    \item LSTM and GRU have similar performance across a wide variety of
+      tasks, and no variations have proven definitely superior.
+  \end{itemize}
+    
+\end{frame}
+
+%--------------------------------------------------------------------
+\section{Optimization of RNNs}
+%--------------------------------------------------------------------
+
+\begin{frame}{Optimization of RNNs}{Second-order methods}
+
+  Before the power of LSTM was realized, many attempts were made to
+  deal with the vanishing gradient problem.
+
+  \medskip
+
+  One approach was the use of second order optmization methods (Newton's
+  method, essentially dividing first derivates by second derivatives, or
+  more exactly, multiplying the gradient by the inverse Hessian).
+
+  \medskip
+
+  These techniques do not work as well as \alert{ordinary SGD with LSTMs}!
+
+  \medskip
+
+  Take-home message: it is better to design a model that is easy to
+  optimize than to use fancy optmization methods.
+  
+\end{frame}
+
+
+\begin{frame}{Optimization of RNNs}{Gradient clipping}
+
+  One simple optimization technique that helps prevent exploding
+  gradients \alert{gradient clipping}, which prevents overshooting
+  when going ``down a cliff:''
+
+  \medskip
+
+  \myfig{3in}{goodfellow-fig10-17}{Goodfellow, Bengio, and Courville (2016), Fig.\ 10.17}
+
+  \medskip
+  
+  Clipping can be done \alert{elementwise} (clipping only the
+  too-large elements) or by a \alert{single scalar} (limiting the
+  length of the gradient vector but maintaining direction).
+  
+\end{frame}
+
+
+\begin{frame}{Optimization of RNNs}{Gradient regularization}
+
+  Another group of techniques attempt to prevent vanishing gradients
+  by trying to maintain a large-enough gradient at every step over time.
+
+  \medskip
+
+  Such \alert{gradient regularization} techniques help with traditional RNNs
+  but are not as effective as LSTMs.
+  
+\end{frame}
+
+%--------------------------------------------------------------------
+\section{Explicit memory}
+%--------------------------------------------------------------------
+
+\begin{frame}{Explicit memory}{Memory networks}
+
+  We know neural networks are very good at learning and storing
+  \alert{implicit knowledge}.
+
+  \medskip
+
+  They are not so good at \alert{directly storing explicit information}
+  such as
+  \begin{itemize}
+  \item A cat is a type of animal
+  \item There is a meeting with the sales team at 3:00 PM
+  \end{itemize}
+
+  \medskip
+
+  Humans have some kind of \alert{working memory} in which we store
+  information currently needed to achieve an immediate goal.
+
+  \medskip
+
+  \alert{Memory networks} store and allow access to information
+  indexed by addresses.
+
+\end{frame}
+
+
+\begin{frame}{Explicit memory}{Neural Turing machines}
+
+  Memory cells in \alert{Neural Turing machines (NTMs)} are similar to
+  LSTMs but generate an internal state specifying \alert{which cell
+    to read from or write to}.
+
+  \medskip
+
+  The memory access, rather than using integer address, outputs a set
+  of weights used to compute a weighted average of many cells, for example
+  via a softmax function.
+
+  \medskip
+
+  The memory cells may contain an arbitrary-length vector, which is
+  both \alert{efficient} (one address indexes a larger memory array)
+  and allows \alert{content-based addressing}.
+
+\end{frame}
+
+
+\begin{frame}{Explicit memory}{Neural Turing machines}
+
+  NTMs learn a \alert{task network} that able to fetch and store information
+  from explicit memory cells.
+
+  \medskip
+  
+  \myfig{2in}{goodfellow-fig10-18}{Goodfellow, Bengio, and Courville (2016), Fig.\ 10.18}
+
+\end{frame}
+
+
+\begin{frame}{Explicit memory}{Types of memory access}
+
+  Memory can be accessed in two ways:
+  \begin{itemize}
+  \item A \alert{deterministic} method that makes \alert{soft}
+    decisions (weighted averages)
+  \item A \alert{stochastic} method that makes \alert{hard} decisions
+    by sampling.
+  \end{itemize}
+  
+  Thus far, deterministic soft methods seem to perform better than
+  hard stochastic methods.
+  
+\end{frame}
+
+  
+\end{document}
+
+
