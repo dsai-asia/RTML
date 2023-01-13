@@ -1,0 +1,799 @@
+\documentclass{beamer}
+
+\mode<presentation>
+{
+  \setbeamertemplate{background canvas}[square]
+  \pgfdeclareimage[width=6em,interpolate=true]{dsailogo}{../dsai-logo}
+  \pgfdeclareimage[width=6em,interpolate=true]{erasmuslogo}{../erasmus-logo}
+  \titlegraphic{\pgfuseimage{dsailogo} \hspace{0.2in} \pgfuseimage{erasmuslogo}}
+  %\usetheme{default}
+  \usetheme{Madrid}
+  \usecolortheme{rose}
+  \usefonttheme[onlysmall]{structurebold}
+}
+
+\usepackage{pgf,pgfarrows,pgfnodes,pgfautomata,pgfheaps,pgfshade}
+\usepackage{amsmath,amssymb}
+\usepackage{graphics}
+\usepackage{ragged2e}
+\usepackage{array}
+\usepackage[latin1]{inputenc}
+\usepackage{colortbl}
+\usepackage[absolute,overlay]{textpos}
+\setlength{\TPHorizModule}{30mm}
+\setlength{\TPVertModule}{\TPHorizModule}
+\textblockorigin{10mm}{10mm}
+\usepackage[english]{babel}
+\usepackage{listings}
+\setbeamercovered{dynamic}
+
+\AtBeginSection[]{
+  \begin{frame}<beamer>
+  \frametitle{Outline}
+  \tableofcontents[currentsection]
+  \end{frame}
+}
+
+\title[Deep Learning]{Deep Learning\\Reinforcement Learning}
+\author{dsai.asia}
+\institute[]{
+  Asian Data Science and Artificial Intelligence Master's Program}
+\date{}
+
+% My math definitions
+
+\renewcommand{\vec}[1]{\boldsymbol{#1}}
+\newcommand{\mat}[1]{\mathtt{#1}}
+\newcommand{\ten}[1]{\mathcal{#1}}
+\newcommand{\crossmat}[1]{\begin{bmatrix} #1 \end{bmatrix}_{\times}}
+\renewcommand{\null}[1]{{\cal N}(#1)}
+\newcommand{\class}[1]{{\cal C}_{#1}}
+\def\Rset{\mathbb{R}}
+\def\Expec{\mathbb{E}}
+\def\Pset{\mathbb{P}}
+\DeclareMathOperator*{\argmax}{argmax}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator*{\sign}{sign}
+\DeclareMathOperator*{\cov}{Cov}
+\DeclareMathOperator*{\diag}{diag}
+\DeclareMathOperator*{\var}{Var}
+\def\norm{\mbox{$\cal{N}$}}
+
+\newcommand{\stereotype}[1]{\guillemotleft{{#1}}\guillemotright}
+
+\newcommand{\myfig}[3]{\centerline{\includegraphics[width={#1}]{{#2}}}
+    \centerline{\scriptsize #3}}
+
+\begin{document}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%             CONTENTS START HERE
+
+%\setbeamertemplate{navigation symbols}{}
+
+\frame{\titlepage}
+
+%--------------------------------------------------------------------
+%\part<presentation>{Part name}
+%
+%\frame{\partpage}
+
+\begin{frame}
+\frametitle{Readings}
+
+Readings for these lecture notes:
+\begin{itemize}
+\item[-] Ng, A. (2017), \textit{Reinforcement Learning and Control}.
+  Lecture note set 12 for CS229, Stanford University.
+\item[-] Sutton, R.S. and Barto, A.G. (2018), \textit{Reinforcement
+  Learning: An Introduction}, 2nd ed., MIT Press.
+\end{itemize}
+
+These notes contain material $\copyright$ Ng (2017) and Sutton and
+Barto (2018).
+
+\end{frame}
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+\begin{frame}{Introduction}
+
+  Now we turn to recently developed methods in the area
+  of \alert{reinforcement learning}.
+
+  \medskip
+
+  First, a short review of tabular RL methods.
+
+  \medskip
+
+  Then we'll dive into the more recently developed deep learning
+  methods for RL.
+
+\end{frame}
+
+
+\begin{frame}{Introduction}{SL vs.\ RL}
+
+  In the supervised learning setting, we give the machine examples of
+  what it should do in particular circumstances.
+
+  \medskip
+
+  Sometimes it is not easy or even possible to come up with such a
+  training set.  Examples include robot motion control, game playing
+  systems, stock trading policies, dynamic allocation of resources to
+  a Web application, ...
+
+  \medskip
+
+  In some of these domains, rather than providing a definite answer,
+  we provide the machine with a \alert{reward function} indicating when
+  it is doing well and when it is doing poorly.
+
+
+\end{frame}
+
+
+\begin{frame}{Introduction}{Reward}
+
+  Example reward functions:
+  \begin{itemize}
+    \item Robot control: give positive rewards for moving forward and
+      negative rewards for falling over.
+    \item Game playing: give positive rewards for winning, negative
+      rewards for losing.
+    \item Robotic exploration: give positive rewards for expanding
+      the ``frontier,'' negative rewards for going over the same old
+      ground.
+    \item Robotic vacuum cleaning: give positive rewards for cleaning
+      dirty areas, negative rewards for spending time in clean areas.
+    \item Web application resource allocation: positive rewards for
+      serving requests quickly, negative rewards for using excessive
+      resources.
+  \end{itemize}
+
+  \medskip
+
+  Usually, reinforcement learning problems are posed as \alert{Markov
+    decision processes}.
+  
+\end{frame}
+
+%======================================================================
+\section{Markov decision processes}
+%======================================================================
+
+\begin{frame}{Markov decision processes}{Formal definition}
+
+  A Markov decision process is a tuple $(S, A, \{P_{sa}\}, \gamma, R)$,
+  where
+  \begin{itemize}
+  \item $S$ is a set of \alert{states}.
+  \item $A$ is a set of \alert{actions}.
+  \item $P_{sa}$ are the \alert{state transition probabilities}. For
+    each state $s \in S$ and action $a \in A$ $P_{sa}$ is a
+    distribution over $S$. $P_{s_ia_j}(s_k)$ gives the probability
+    that we transition to state $s_k$ when we perform action $a_j$ in
+    state $s_i$.
+  \item $\gamma \in [0,1)$ is called the \alert{discount factor}.
+  \item $R : S \times A \rightarrow \Rset$ is the \alert{reward function}.
+    Sometimes we use $R : S \rightarrow \Rset$.
+  \end{itemize}
+
+\end{frame}
+
+
+\begin{frame}{Markov decision processes}{Payoff}
+
+  A MDP proceeds as follows:
+  \begin{itemize}
+  \item Start in some state $s_0$.
+  \item Choose action $a_0 \in A$.
+  \item Sample $s_1 \sim P_{s_0a_0}$.
+  \item Choose action $a_1$.
+  \item Sample $s_2 \sim P_{s_1a_1}$.
+  \item Repeat...
+  \end{itemize}
+
+  \medskip
+
+  We can represent the progress of the process as
+  \[ s_0 \stackrel{a_0}{\rightarrow} s_1 \stackrel{a_1}{\rightarrow}
+     s_2 \stackrel{a_2}{\rightarrow} s_3 \stackrel{a_3}{\rightarrow} \cdots
+  \]
+
+  Given such a sequence, we can compute the \alert{total payoff} as
+  \[ R(s_0,a_0) + \gamma R(s_1,a_1) + \gamma^2 R(s_2,a_2) + \cdots \]
+  or
+  \[ R(s_0) + \gamma R(s_1) + \gamma^2 R(s_2) + \cdots .\]
+  
+\end{frame}
+
+
+\begin{frame}{Markov decision processes}{Simple MDP example}
+
+\myfig{3in}{mdp}{\url{https://en.wikipedia.org/wiki/Markov_decision_process}}
+
+\end{frame}
+
+
+\begin{frame}{Markov decision processes}{Discount}
+
+  The reward at timestep $t$ is \alert{discounted} by a factor $\gamma^t$.
+
+  \medskip
+
+  In some applications, time might not matter and we would use $\gamma=1$.
+
+  \medskip
+
+  In many other applications, we want to accrue positive rewards as quickly
+  as possible, so $\gamma < 1$.
+
+  \medskip
+
+  When $R(\cdot)$ is the amount of money we make, $\gamma$ would
+  represent the effect of interest (money accrued today is more
+  valuable in the long term than money accrued tomorrow).
+
+\end{frame}
+
+
+\begin{frame}{Markov decision processes}{Policy, value function}
+
+  How should our learning agent behave?
+
+  \medskip
+
+  A \alert{policy} is a function $\pi : S \rightarrow A$ mapping from states
+  to actions.
+
+  \medskip
+
+  \alert{Executing} policy $\pi$ means when we are in state $s$, we
+  take action $a = \pi(s)$.
+
+  \medskip
+
+  The \alert{value function} for policy $\pi$ is
+  \[ V^\pi(s)=\Expec[ R(s_0)+\gamma R(s_1)+\gamma^2R(s_2)+\cdots \mid s_0 = s ; \pi], \]
+  i.e., the expected sum of discounted rewards upon starting in state
+  $s$ and taking actions according to $\pi$.
+  
+\end{frame}
+
+
+\begin{frame}{Markov decision processes}{Bellman equations}
+
+  Given a fixed policy $\pi$, the value function $V^\pi$ satisfies the
+  \alert{Bellman equations}
+  \[ V^\pi(s) = R(s) + \gamma\sum_{s'\in S} P_{s\pi(s)}(s')V^\pi(s') . \]
+  $R(s)$ is called the \alert{immediate reward} we get for starting in
+  state $s$.
+
+  \medskip
+
+  The second term (the summation) can be rewritten $\Expec_{s' \sim
+    P_{s\pi(s)}}[V^\pi(s')]$, i.e., the expected sum of discounted
+  rewards for starting in state $s'$, where $s'$ is distributed
+  according to $P_{s\pi(s)}$, the distribution over states resulting
+  from action $\pi(s)$ in state $s$.
+
+\end{frame}
+
+
+\begin{frame}{Markov decision processes}{Solving the Bellman equations}
+
+  The Bellman equations give us a simple way to determine $V^\pi$ for
+  finite-state MDPs ($|S| < \infty$).
+
+  \medskip
+
+  Simply write down the equation $V^\pi(s)$ for each $s\in S$.
+
+  \medskip
+
+  When $R$, $P_{sa}$, and $\pi$ are fixed, we have $|S|$ linear
+  equations in $|S|$ unknowns.
+
+  \medskip
+
+  [Exercise: find $V^\pi$ for a small MDP such as a robot maze escape.]
+  
+\end{frame}
+
+
+\begin{frame}{Markov decision processes}{Optimal value function and policy}
+
+  We define the \alert{optimal value function} as
+  \[ V^*(s) = \max_\pi V^\pi(s) .\]
+  We can write the Bellman equations for the optimal value function as
+  \[ V^*(s) = R(s) + \max_{a\in A}\gamma\sum_{s'\in S}P_{sa}(s')V^*(s') .\]
+  We have the immediate reward plus the maximum over all $a$ of the
+  expected future sum of discounted rewards we'll get from $a$.
+
+  \medskip
+
+  We define the \alert{optimal policy} $\pi^* : S \rightarrow A$ as
+  \begin{equation}
+    \label{optpol}
+    \pi^*(s) = \argmax_{a \in A} \sum_{s'\in S} P_{sa}(s')V^*(s')
+  \end{equation}
+  
+\end{frame}
+
+
+\begin{frame}{Markov decision processes}{Optimal policy}
+
+  Some facts:
+  \[ \forall s, V^*(s) = V^{\pi^*}(s). \]
+  \[ \forall s, \pi, V^{\pi^*}(s) \ge V^\pi(s). \]
+  i.e., $\pi^*$ as defined in Equation (1) is the optimal policy.
+
+  \medskip
+
+  Note that $\pi^*$ is optimal for \textit{all} states $s$.
+  So there is no need to modify $\pi^*$ according to the start state.
+
+  \medskip
+
+  So our question, then, will be
+  \alert{how can we find $\pi^*$ for a given MDP?}
+
+\end{frame}
+
+
+\begin{frame}{Markov decision processes}{State value vs.\ state-action value}
+
+  So far, we have characterized the \alert{value} of a state $s$
+  using the state value function $V^{\pi}(s)$ as the expected sum of
+  discounted rewards we get from executing $\pi$ from state $s$.
+
+  \medskip
+
+  Many algorithms use, instead of $V^\pi$, the \alert{state-action}
+  value function $Q^\pi(s,a)$, the expected sum of discounted rewards
+  we get from executing $a$ in $s$ then following $\pi$.
+
+  \medskip
+
+  $$Q^\pi(s,a) = \sum_{s'}P_{sa}(s')\left[R(s,a) + \gamma\sum_{a'}\pi(a' \mid s')
+         Q(s',a')\right]$$
+
+\end{frame}
+
+%======================================================================
+\section{Model-free tabular methods}
+%======================================================================
+
+\begin{frame}{Model-free tabular methods}{Model-based tabular methods}
+
+  When $S$ and $A$ are small discrete sets, \alert{tabular} learning
+  methods are appropriate.
+
+  \medskip
+
+  If $P_{sa}$ is also known, we say we have a \alert{model} of the
+  environment.
+
+  \medskip
+
+  We can find the optimal policy for small $S$ and $A$ with known
+  $P_{sa}$ using simple iterative algorithms like \alert{value iteration}
+  and \alert{policy iteration}.
+
+  \medskip
+
+  Such methods are \alert{tabular model based methods}, as they use 
+  knowledge of $P_{sa}$.
+
+\end{frame}
+
+
+\begin{frame}{Model-free tabular methods}{Model learning tabular methods}
+
+  Usually, $P_{sa}$ is not known.
+
+  \medskip
+
+  The simplest method for learning $P_{sa}$ is to add \alert{transition learning}
+  to the value iteration algorithm. 
+
+  \medskip
+
+  Among recent deep learning methods for RL, MuZero from DeepMind is
+  an example of a method that learns an explicit representation of $P_{sa}$
+  during exploration.
+
+\end{frame}
+
+
+\begin{frame}{Model-free tabular methods}{Model free tabular Monte Carlo}
+
+  Can we learn $\pi^*$ without knowing or learning $P_{sa}$?
+
+  \medskip
+
+  Methods that do this are called \alert{model free}.
+
+  \medskip
+
+  Monte Carlo methods are methods in which the agent learns
+  about $V^*$ or $Q^*$ by
+
+  \begin{enumerate}
+  \item Selecting action $a$ in state $s$ according to $\pi$
+  \item Executing action $a$ leading to $s'$
+  \item Repeat 1 and 2 until end of the episode
+  \item Use the rewards obtained during the episode to update
+        $Q^\pi$ or $V^\pi$ and $\pi$.
+  \end{enumerate}
+
+  Monte Carlo methods tend to be slow because they don't update
+  $\pi$ until the episode is finished.
+
+\end{frame}
+
+
+\begin{frame}{Model-free tabular methods}{Model free tabular TD}
+
+  \alert{Temporal difference} methods update estimates of
+  $V^\pi$ or $Q^\pi$ iteratively based on other learned estimates,
+  \alert{as the method is executing}.
+
+  \medskip
+
+  SARSA and Q-learning are popular tabular model free TD methods.
+
+\end{frame}
+
+
+\begin{frame}{Model-free tabular methods}{TD control: SARSA}
+
+  SARSA is a simple method for finding $\pi^*$.
+
+  \medskip
+
+  It is an \alert{on-policy} TD policy iteration method.
+
+  \medskip
+
+  The SARSA update is
+  $$Q(s_t,a_t) \leftarrow Q(s_t,a_t) + \alpha\left[ R(s_{t+1}) + \gamma
+    Q(s_{t+1},a_{t+1}) - Q(s_t,a_t) \right]. $$
+
+  The method is called SARSA due to the quintuple $(s_t, a_t, r_{t+1},
+  s_{t+1}, a_{t+1})$.
+  
+\end{frame}
+
+
+\begin{frame}{Model-free tabular methods}{TD control: SARSA}
+
+  \begin{block}{\textbf{Algorithm} \textsc{SARSA on-policy TD control}}
+  \begin{tabbing}
+    xxx \= xxx \= xxx \= \kill
+    \> Input: learning rate $\alpha$, exploration probability $\varepsilon$ \\
+    \> $\forall s, a$, initialize $Q(s,a)$ arbitrarily
+    except $Q(\mathrm{terminal},\cdot) = 0$ \\
+    \> For each episode: \\
+    \> \> Initialize $s$, choose $a$ using policy derived from $Q$ (e.g., $\varepsilon$-greedy) \\
+    \> \> For each step in episode: \\
+    \> \> \> Take action $a$, observe $r$, $s'$ \\
+    \> \> \> Choose $a'$ from $s'$ using policy derived from $Q$ (e.g., $\varepsilon$-greedy) \\
+    \> \> \> $Q(s,a) \leftarrow Q(s,a) + \alpha \left[ r + \gamma Q(s', a') - Q(s, a) \right]$ \\
+    \> \> \> $s \leftarrow s'; a \leftarrow a'$
+  \end{tabbing}
+  \end{block}
+
+\end{frame}
+
+
+\begin{frame}{Model-free tabular methods}{TD control: SARSA}
+
+  There's a nice example of SARSA for the ``Windy Gridworld'' example
+  in Sutton and Barto on p.\ 130.
+
+  \medskip
+
+  \alert{Exercise:} reproduce the SARSA result shown in the graph on
+  p.\ 130, then do Exercise 6.9 on p.\ 131.
+
+\end{frame}
+
+
+\begin{frame}{Model-free tabular methods}{TD control: Q-learning}
+
+  \alert{Q-learning} (Watkins, 1989) was one of the early
+  breakthroughs in RL.
+
+  \medskip
+
+  It is also fundamental to the Mnih et al.\ (2013) breakthrough with DQN.
+
+  \medskip
+
+  The Q-learning update is
+  $$Q(s_t,a_t) \leftarrow Q(s_t,a_t) + \alpha \left[ R(s_{t+1}) + \gamma
+    \max_a Q(s_{t+1},a) - Q(s_t,a_t) \right]. $$
+
+  \medskip
+
+  Compare with SARSA.
+
+  \medskip
+  
+  Actions are taken using $\varepsilon$-greedy, but the updates are
+  based on the action that would be taken with the optimal policy,
+  without $\varepsilon$-greedy.
+
+  \medskip
+
+  Because of this difference, Q-learning is an \alert{off-policy} TD
+  method.
+
+\end{frame}
+
+
+\begin{frame}{Model-free tabular methods}{TD control: Q-learning}
+  
+  \begin{block}{\textbf{Algorithm} \textsc{Q-learning off-policy TD control}}
+  \begin{tabbing}
+    xxx \= xxx \= xxx \= \kill
+    \> Input: learning rate $\alpha$, exploration probability $\varepsilon$ \\
+    \> $\forall s, a$, initialize $Q(s,a)$ arbitrarily
+    except $Q(\mathrm{terminal},\cdot) = 0$ \\
+    \> For each episode: \\
+    \> \> Initialize $s$ \\
+    \> \> For each step in episode: \\
+    \> \> \> Choose $a$ using policy derived from $Q$ (e.g., $\varepsilon$-greedy) \\
+    \> \> \> Take action $a$, observe $r$, $s'$ \\
+    \> \> \> $Q(s,a) \leftarrow Q(s,a) + \alpha \left[ r + \gamma \max_{a'} Q(s', a') - Q(s, a) \right]$ \\
+    \> \> \> $s \leftarrow s'$
+  \end{tabbing}
+  \end{block}
+
+  \medskip
+  
+  Note that Q-learning is a little simpler than SARSA, and note
+  precisely why it is off-policy.
+
+\end{frame}
+
+
+\begin{frame}{Model-free tabular methods}{TD control: Q-learning}
+
+  There is a nice demonstration of the differences between SARSA and
+  Q-learning, the ``Cliff Walking'' example in Sutton and Barto on
+  p.\ 132.
+
+  \medskip
+
+  \alert{Exercise}: implement SARSA and Q-learning for the cliff walking
+  example to demonstrate that Q-learning learns an optimal policy that is
+  different from (and better than) the $\varepsilon$-greedy policy learned
+  by SARSA.
+  
+\end{frame}
+
+
+\begin{frame}{Model-free tabular methods}{Maximization bias and double learning}
+
+  The TD control algorithms involve \alert{maximization} during policy
+  construction.
+
+  \medskip
+
+  Q-learning's target policy is the greedy policy, which involves
+  taking action $a$ maximizing $Q(s,a)$.
+
+  \medskip
+
+  SARSA's policy is, for example, $\varepsilon$-greedy, also involving
+  maximization.
+
+  \medskip
+
+  The max operator tends to introduce \alert{bias} into the value estimates.
+
+  \medskip
+
+  Consider a state $s$ for which all actions $a$ have 0 value. With
+  uncertain but unbiased estimates of $Q(s,a)$, some will be positive
+  and some will be negative.
+
+  \medskip
+
+  $\max_a Q(s,a)$, on the other hand, will almost always be positive,
+  a positive bias called \alert{maximization bias}.
+
+\end{frame}
+
+
+\begin{frame}{Model-free tabular methods}{Maximization bias and double learning}
+
+  Sutton and Barto give an example MDP in which the optimal
+  action is always to move ``right'' from state A, but due to maximization
+  bias and the high variance of the distribution over rewards,
+  Q-learning will overestimate the value of a ``left'' move.
+
+  \bigskip
+  
+  \myfig{3in}{sutton-fig6-5}{Sutton and Barto (2018), Fig.\ 6.5}
+  
+\end{frame}
+
+
+\begin{frame}{Model-free tabular methods}{Maximization bias and double learning}
+
+  Idea to learn without maximization bias: divide the episodes into \alert{two
+    sets} and use them to learn two separate estimates $Q_1$ and $Q_2$ of
+  $Q(a)$.
+
+  \medskip
+
+  We use $Q_1$ for maximization: $$a^* = \argmax_a Q_1(a),$$
+  and we use $Q_2$ as the estimate of the value:
+  $$Q_2(a^*) = Q_2(\argmax_a Q_1(a)).$$
+
+  The expectation $$\mathbb{E}\left[ Q_2(a^*) \right] = q(a^*)$$ is
+  unbiased.
+  
+\end{frame}
+
+
+\begin{frame}{Model-free tabular methods}{Maximization bias and double learning}
+
+  We also use $Q_1$ as an unbiased estimate of the value of actions selected
+  using $Q_2$: $$Q_1(a^*)=Q_1(\argmax_a Q_2(a)).$$
+
+  This is called \alert{double learning}.
+
+  \medskip
+
+  We learn two estimates, but only one is updated on each episode.
+
+  \medskip
+
+  \alert{Double Q-learning} uses this idea to get more accurate, less
+  biased estimates of values and can learn an optimal policy for the
+  left/right environment above.
+  
+\end{frame}
+
+
+\begin{frame}{Model-free tabular methods}{Maximization bias and double learning}
+
+  \begin{block}{\textbf{Algorithm} \textsc{Double Q-learning} for $Q_1 \approx
+      Q_2 \approx q$}
+    \begin{tabbing}
+      xxx \= xxx \= xxx \= xxx \= xxx \= xxx \= \kill
+      Input: learning rate $\alpha$, exploration probability $\varepsilon$ \\
+      $\forall s, a$, initialize $Q_1(s,a)$ and $Q_2(s,a)$ arbitrarily
+      except $Q(\mathrm{terminal},\cdot) = 0$ \\
+      For each episode: \\
+      \> Initialize $s$ \\
+      \> For each step in episode: \\
+      \> \> Choose $a$ using $\varepsilon$-greedy with $Q_1+Q_2$ \\
+      \> \> Take action $a$, observe $r$, $s'$ \\
+      \> \> With probability $\frac{1}{2}$: \\
+      \> \> \> $Q_1(s,a) \leftarrow Q_1(s,a) \; + $ \\
+      \> \> \> \> \> \> $\alpha \left[ r + \gamma Q_2(s', \argmax_{a'} Q_1(s', a')) - Q_1(s, a) \right]$ \\
+      \> \> else: \\
+      \> \> \> $Q_2(s,a) \leftarrow Q_2(s,a) \; + $ \\
+      \> \> \> \> \> \> $\alpha \left[ r + \gamma Q_1(s', \argmax_{a'} Q_2(s', a')) - Q_2(s, a) \right]$ \\
+      \> \> $s \leftarrow s'$
+    \end{tabbing}
+  \end{block}
+
+\end{frame}
+
+
+\begin{frame}{Model-free tabular methods}{Conclusion}
+
+  We've covered MDPs, the idea of Monte Carlo control, and two of
+  the most popular model-free tabular methods for RL, SARSA and Q-learning.
+
+  \medskip
+
+  These are the foundations of Deep Reinforcement Learning.
+
+\end{frame}
+
+
+%======================================================================
+\section{Continuous state MDPs}
+%======================================================================
+
+\begin{frame}{Continuous state MDPs}{Examples}
+
+  Now that we can estimate models for $P_{sa}$ and $R$, we have
+  the following remaining assumptions:
+  \begin{itemize}
+  \item $|S| < \infty$
+  \item $|A| < \infty$
+  \item The outcome $s'$ obtained from executing action $a$ in state
+    $s$ is observable.
+  \item The reward $R(s)$ obtained from state $s$ is immediately
+    observable.
+  \end{itemize}
+
+  \medskip
+
+  What about \alert{relaxing the finite state assumption}?
+
+  \medskip
+
+  In a car or ground robot, we might have a state
+  $(x,y,\theta,\dot{x},\dot{y},\dot{\theta})$. $S = \Rset^6$.
+
+  \medskip
+
+  In the inverted pendulum problem, we have
+  $(x,\theta,\dot{x},\dot{\theta})$. $S=\Rset^4$.
+
+  \medskip
+
+  For an aircraft, we have $(x,y,z,\phi,\theta,\psi,\dot{x},\dot{y},\dot{z},\dot{\phi},\dot{\theta},\dot{\psi})$. $S = \Rset^{12}$.
+
+  \medskip
+
+  Now tabular learning is impossible, and we need deep RL methods!
+
+\end{frame}
+
+%======================================================================
+\section{Partially observable Markov decision processes}
+%======================================================================
+
+\begin{frame}{Partially observable Markov decision processes (POMDPs)}
+
+  Sometimes we are not able to fully observe $\vec{s}_t$.
+
+  \medskip
+
+  Instead, we may only be able to take an \alert{observation} related
+  to $\vec{s}_t$, such taking a picture with a camera or a distance
+  scan with a laser or a GPS reading from a GPS device.
+
+  \medskip
+
+  This leads to the idea of the \alert{partially observable Markov
+    decision process (POMDP)}.
+
+  \medskip
+
+  We assume that at each timestep $t$ we obtain an observation
+  $\vec{z}_t \in {\cal O}$ related to the state $\vec{s}_t$ by a distribution
+  $P_{zs}(\vec{z} \mid \vec{s})$.
+
+  \medskip
+
+  A POMDP with finite horizon is thus given by a tuple $({\cal S},{\cal O},{\cal
+    A},P_{sa},P_{zs},T,R)$.
+
+  \medskip
+
+  There are many methods for dealing with POMDPs. The simplest
+  approach, used in most deep RL methods, is to
+  \alert{simply treat $z_t$ as the state $s_t$}!
+
+\end{frame}
+
+%======================================================================
+\section{Conclusion}
+%======================================================================
+
+\begin{frame}{Conclusion}
+
+  Now we understand the foundations of reinforcement learning and are
+  ready to tackle modern deep RL algorithms.
+
+\end{frame}
+
+
+\end{document}
+
